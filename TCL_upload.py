@@ -387,7 +387,7 @@ script_args=
 
 if __name__ == "__main__":
 
-    controller = Newport_Controller_Connection( ip="10.219.2.44", username="Administrator", password="Administrator")
+    controller = Newport_Controller_Connection( ip="10.219.2.44")
 
     controller.PVT_verification(
         group=controller.MULTI_AXIS_GROUP,
