@@ -70,7 +70,7 @@ if {$socketID == -1} {
     def write_file(self, file_name):
         import os
 
-        with open(os.path.join("TCL_Scripts",file_name), "w") as f:
+        with open(file_name, "w") as f:
             f.write(self.string)
             f.close()
         print(f"File written to {file_name}")
