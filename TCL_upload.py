@@ -43,6 +43,12 @@ class Newport_Controller_Connection():
         self.TRAJECTORIES_PATH = "trajectories"
         self.GATHERINGS_PATH = "gatherings"
 
+        # Parameters for maximum values for our instruments
+        self.pos1_maxVel = 40
+        self.pos1_maxAcc = 160
+        self.pos2_maxVel = 500
+        self.pos2_maxAcc = 2000 
+
 
 
 
@@ -102,7 +108,7 @@ class Newport_Controller_Connection():
 
 
 
-    def execute_tcl_script(self, script_name, task_name=None):
+    def execute_tcl_script(self, script_name, task_name=None, verify_pvt=False):
 
         ''' Execute a tcl script on the Newport XPS controller.
         
@@ -120,6 +126,11 @@ class Newport_Controller_Connection():
             task_name="Demo_file-run-1",
         )
         '''
+
+        if verify_pvt is not None:
+            response = self.full_pvt_verification(self.MULTI_AXIS_GROUP, verify_pvt)
+            if response != 0:
+                raise Exception(f"PVT file verification failed")
 
         ip = self.IP
 
@@ -144,7 +155,7 @@ class Newport_Controller_Connection():
         except Exception as e:
             print("Error occurred:", e)
 
-    def upload_and_execute(self, local_path, remote_filename, script_name= None, task_name=None, destpath="scripts", enable_overwrite=False):
+    def upload_and_execute(self, local_path, remote_filename, script_name= None, task_name=None, destpath="scripts", enable_overwrite=False, verify_pvt=None):
         ''' Upload a tcl script to the Newport XPS controller and execute it.
 
         Args:
@@ -157,19 +168,10 @@ class Newport_Controller_Connection():
                                    Default is False, which will not overwrite existing files.
 
         '''
-        # Usage
-        '''
-        upload_and_execute(
-            local_path=os.path.join("TCL_Scripts", "Demo_file2.tcl"),
-            remote_filename="Demo_file2.tcl"
-            task_name="Demo_file2-run-1",
-        )
-        '''
 
-
-        
         self.upload_file(local_path, remote_filename, destpath=destpath, enable_overwrite=enable_overwrite)
-        self.execute_tcl_script(remote_filename if script_name==None else script_name, task_name=task_name)
+        time.sleep(1)  # Wait a bit for the file to be uploaded before executing
+        return self.execute_tcl_script(remote_filename if script_name==None else script_name, task_name=task_name, verify_pvt=verify_pvt)
 
     
 
@@ -194,9 +196,6 @@ class Newport_Controller_Connection():
             print("Downloaded Gathering.dat")
         else:
             print("Failed to download:", response.status_code, response.text)
-
-
-
 
     def convert_dat_to_csv(self, dat_path, csv_path):
 
@@ -224,18 +223,6 @@ class Newport_Controller_Connection():
             writer.writerows(rows)
 
         print(f"Converted {dat_path} to {csv_path}")
-
-    if False:
-        upload_and_execute(
-            ip="10.219.2.44",
-            local_path=os.path.join("TCL_Scripts", "multi-axis.tcl"),
-            remote_filename="multi-axis.tcl",
-        )
-
-        execute_tcl_script(
-        ip="10.219.2.44",
-        script_name="traj.tcl",
-    )
         
 
     def send_fcgi_command(self, commands):
@@ -278,6 +265,7 @@ class Newport_Controller_Connection():
         Returns:
             bool: True if the gathering completed successfully, False if it timed out.'''
         
+        zero_val = True
 
         timeout = max(timeout, (self.time_ms//1000) + 1)    # If we are intentionally trying to record for longer, extend the timeout
         start_time = time.time()
@@ -288,13 +276,17 @@ class Newport_Controller_Connection():
                 parts = response.split(",")
                 current = int(parts[1])
                 total = self.time_ms    # Total time that we will be recording for
+
+                if zero_val and current != 0:
+                    zero_val = False
+
                 print(f"Gathering: {current}/{total}")
                 if current >= total:
                     return True
             except Exception as e:
                 print("Polling parse error:", e)
 
-            if time.time() - start_time > timeout:
+            if (time.time() - start_time > timeout) and zero_val:
                 print("Timeout reached.")
                 return False
             time.sleep(0.5)
@@ -362,7 +354,7 @@ script_args=
             group (int): The group number to verify.
             filename (str): The name of the PVT file to verify.
         '''
-        self.send_fcgi_command([f"MultipleAxesPTVerification(Group{group},{filename})"])
+        return self.send_fcgi_command([f"MultipleAxesPVTVerification(Group{group},{filename})"])
 
     def PVT_verification_result_get(self, group, pos):
         ''' Get the results of the PVT verification for a group on the Newport XPS controller.\n
@@ -382,36 +374,66 @@ script_args=
         response = self.send_fcgi_command([f"MultipleAxesPVTVerificationResultGet(Group{group}.Pos{pos}, char * , double * , double * , double * , double *)"])
         return response
 
+
+    def full_pvt_verification(self, group, filename):
+        ''' Perform a full PVT verification for a group on the Newport XPS controller.
+        Args:
+            group (int): The group number to verify.
+            filename (str): The name of the PVT file to verify.
+        Returns:
+            int: The result of the verification. 0 indicates success, non-zero indicates failure.
+        '''
+        response1 = self.PVT_verification(group, filename)
+        time.sleep(1)  # Wait for the verification to complete
+        
+        response2 = self.PVT_verification_result_get(group, pos=1)
+        response3 = self.PVT_verification_result_get(group=group, pos=2)
+
+        lines1 = response1.split(",")
+        lines2 = response2.split(",")
+        lines3 = response3.split(",")
+
+        if int(lines1[0]) == 0:
+            return 0
+
+        if float(lines2[4]) > self.pos1_maxVel:
+            print(f"Position 1 velocity {lines2[4]} exceeds maximum velocity: {self.pos1_maxVel}")
+        if float(lines2[5]) > self.pos1_maxAcc:
+            print(f"Position 1 acceleration {lines2[5]} exceeds maximum acceleration: {self.pos1_maxAcc}")
+        if float(lines3[4]) > self.pos2_maxVel:
+            print(f"Position 2 velocity {lines3[4]} exceeds maximum velocity: {self.pos2_maxVel}")
+        if float(lines3[5]) > self.pos2_maxAcc:
+            print(f"Position 2 acceleration {lines3[5]} exceeds maximum acceleration: {self.pos2_maxAcc}")
+
+
+
 # -=============================================-
 
 
 if __name__ == "__main__":
 
-    controller = Newport_Controller_Connection( ip="10.219.2.44")
+    controller = Newport_Controller_Connection( ip="10.219.2.44", username="Administrator", password="Administrator")
 
-    controller.PVT_verification(
-        group=controller.MULTI_AXIS_GROUP,
-        filename="sine_wave.pvt"
-    )
-
-    controller.PVT_verification_result_get(
-        group=controller.MULTI_AXIS_GROUP,
-        pos=2
-    )
+    #controller.init_group(controller.MULTI_AXIS_GROUP)
+    #controller.home_group(controller.MULTI_AXIS_GROUP)
 
 
-
-    controller.time_ms = 10_000
+    controller.time_ms = 18_000
     controller.start_gathering(trigger="Group3.PVT.TrajectoryStart", time_ms=controller.time_ms)
-    controller.upload_and_execute(
+    result = controller.upload_and_execute(
         local_path=os.path.join("TCL_Scripts", "sine_wave.pvt"),
         remote_filename="sine_wave.pvt",
         destpath=controller.TRAJECTORIES_PATH,
         enable_overwrite=True,
         script_name="traj.tcl",
         task_name="traj-run-1",
+        verify_pvt="sine_wave.pvt"
     )
-    if controller.poll_until_gathering_done(timeout=20):
+
+    if result is not None:
+        raise Exception("PVT file verification failed.")
+
+    if controller.poll_until_gathering_done(timeout=5):
         controller.stop_and_save_gathering()
         controller.get_gathered_data()
         controller.open_graph_webpage()
