@@ -150,8 +150,6 @@ def generate_deceleration_pvt(last_pos, last_vel, dt=0.2, acc=-100.0):
     negative_sign = -1 if last_vel < 0 else 1
 
     first = True
-
-    print(last_pos, last_vel, dt, acc)
     
     while (negative_sign * vel) > 0:
         next_vel = vel + (acc * dt * negative_sign)
@@ -161,19 +159,20 @@ def generate_deceleration_pvt(last_pos, last_vel, dt=0.2, acc=-100.0):
         avg_vel = (vel + next_vel) / 2
 
         if first:
-            delta_pos = min(abs(avg_vel * dt), abs(last_pos*0.75)) * negative_sign
+            delta_pos = abs(avg_vel * dt) * negative_sign
             first = False
         else:
-            delta_pos = min(abs(avg_vel * dt), abs(delta_pos*0.75 )) * negative_sign
+            delta_pos = abs(avg_vel * dt) * negative_sign
 
         rows.append((dt, 0.0, 0.0, delta_pos, next_vel))
         vel = next_vel
     
     return rows
 
-def fix_csv(filename):
+def fix_csv(filename, acceleration=-1200):
     """
-    Fix the CSV file by removing the first line if it contains a timestamp of 0.0.
+    Fix the CSV file by removing the first line if it contains a timestamp of 0.0 
+    and adjusting values to be relative instead of absolute.
     """
     lines = []
     with open(filename, 'r+') as f:
@@ -208,7 +207,7 @@ def fix_csv(filename):
 
             
             
-            print(f"Line {i}: Original timestamp: {float(parts[0])}, previous timestamp: {float(lines[i-1].strip().split(',')[0])}, Delta time: {delta_time:.5f}")
+            #print(f"Line {i}: Original timestamp: {float(parts[0])}, previous timestamp: {float(lines[i-1].strip().split(',')[0])}, Delta time: {delta_time:.5f}")
    
             
             parts[0] = f"{delta_time:.5f}"
@@ -234,12 +233,14 @@ def fix_csv(filename):
         vel_diff = max(vel_value1, vel_value2) - min(vel_value1, vel_value2)
         deceleration = vel_diff / 2  # Half the difference to decelerate to zero
 
-        rows = generate_deceleration_pvt(pos_value1, vel_value2, dt=float(dt)*4, acc=-50)
+        rows = generate_deceleration_pvt(pos_value1, vel_value2, dt=float(dt), acc=acceleration)
 
         rows_strings = [f"{row[0]:.5f},{row[1]:.5f},{row[2]:.5f},{row[3]:.5f},{row[4]:.5f}\n" for row in rows]
 
-
-        lines[2] = lines[2].replace(f"{float(dt)}", f"{float(dt) * 4}", 1)
+        # Gives the first line more time to reach the first position, gives us more headroom for acceleration
+        parts = lines[2].strip().split(',')
+        parts[0] = f"{float(parts[0]) * 4}"
+        lines[2] = ','.join(parts) + '\n'
 
 
     
@@ -271,9 +272,12 @@ if __name__ == "__main__":
     #    dt=dt
     #)
 
+    controller.safe_start(group=MULTI_AXIS_GROUP)
+
+
 
     import pvt
-    duration =15
+    duration =5
     amplitude = 90
     period = 3
     # Define the sequence of time values, in seconds.
@@ -298,19 +302,37 @@ if __name__ == "__main__":
     # Create a sequence, generating the missing velocity values
     pvt_sequence = pvt.Sequence.generate_velocities(t, position_sequence, velocity_sequences=None)
     # Save the sequence to a file for import to the PVT Viewer App
-    pvt_sequence.save_to_file(filename)
+    #pvt_sequence.save_to_file(filename)
 
 
     print(f"Generated PVT sequence.")
 
     # Fix the CSV file to remove the first line and adjust timestamps
-    fix_csv(filename)
+    #fix_csv(filename)
 
-    controller.upload_file(filename, remote_filename=filename, destpath=controller.TRAJECTORIES_PATH, enable_overwrite=True)
-    time.sleep(1)
-    controller.full_pvt_verification(
-        group=controller.MULTI_AXIS_GROUP,
-        filename="sine_wave.pvt")
+    controller.time_ms = 10_000
+    controller.start_gathering(trigger="Group3.PVT.TrajectoryStart", time_ms=controller.time_ms)
+    result = controller.upload_and_execute(
+        local_path=filename,
+        remote_filename="sine_wave.pvt",
+        destpath=controller.TRAJECTORIES_PATH,
+        enable_overwrite=True,
+        script_name="traj.tcl",
+        task_name="traj-run-1",
+        verify_pvt="sine_wave.pvt"
+    )
+
+    if result is not None:
+        raise Exception("PVT file verification failed.")
+
+    if controller.poll_until_gathering_done(timeout=5):
+        controller.stop_and_save_gathering()
+        controller.get_gathered_data()
+        controller.open_graph_webpage()
+    else:
+        print("Gathering never completed.")
+
+    controller.convert_dat_to_csv("Gathering.dat", "Gathering.csv")
 
     '''
     pos = [0]

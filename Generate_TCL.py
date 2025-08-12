@@ -1,9 +1,12 @@
+ROTATION = 1
+TRANSLATION = 2
+MULTI_AXIS_GROUP = 3
 
-class TCL_scrpt():
+class TCL_script():
     def __init__(self):
-        self.string = self.initString()
+        self.string = self._initString()
 
-    def initString(self):
+    def _initString(self):
         string = '''
     proc DisplayErrorAndCloseConnection {socketID code APIName} {
     global tcl_argv
@@ -75,20 +78,40 @@ if {$socketID == -1} {
             f.close()
         print(f"File written to {file_name}")
 
-ROTATION = 1
-TRANSLATION = 2
-MULTI_AXIS_GROUP = 3
+    def pvt_verification(self, group, pvt_filename):
+        self.string += f'''
+        set code [catch "MultipleAxesPVTVerification  $socketID Group{group} {pvt_filename}"]''' + '''
+        if {$code != 0} {
+            DisplayErrorAndCloseConnection $socketID $code "MultipleAxesPVTVerification"
+            return
+        }
+        '''
+    
+    def pvt_execution(self, group, pvt_filename):
+        self.string += f'''
+        set code [catch "MultipleAxesPVTExecution $socketID Group{group} {pvt_filename} 1"]''' + '''
+        if {$code != 0} {
+            DisplayErrorAndCloseConnection $socketID $code "MultipleAxesPVTExecution"
+            return
+        }
+        '''
 
-my_script = TCL_scrpt()
 
-#my_script.move(TRANSLATION, 200)
-#my_script.wait(1000)
-#my_script.move(ROTATION, 100)
-#my_script.move_and_wait(TRANSLATION, -200, 1000)
+def main():
+    my_script = TCL_script()
 
-my_script.home(MULTI_AXIS_GROUP)
-my_script.move(MULTI_AXIS_GROUP, [40, 100])
-my_script.move_and_wait(MULTI_AXIS_GROUP, [-50, -250], 1000)
-my_script.move(MULTI_AXIS_GROUP, [0,0])
+    #my_script.move(TRANSLATION, 200)
+    #my_script.wait(1000)
+    #my_script.move(ROTATION, 100)
+    #my_script.move_and_wait(TRANSLATION, -200, 1000)
 
-my_script.write_file("multi-axis.tcl")
+    my_script.home(MULTI_AXIS_GROUP)
+    my_script.move(MULTI_AXIS_GROUP, [40, 100])
+    my_script.move_and_wait(MULTI_AXIS_GROUP, [-50, -250], 1000)
+    my_script.move(MULTI_AXIS_GROUP, [0,0])
+
+    my_script.write_file("multi-axis.tcl")
+
+if __name__ == "__main__":
+    main()
+

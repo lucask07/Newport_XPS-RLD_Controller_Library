@@ -159,7 +159,7 @@ class Newport_Controller_Connection():
         ''' Upload a tcl script to the Newport XPS controller and execute it.
 
         Args:
-            local_path      (str): The local path to the tcl script to be uploaded.
+            local_path      (str): The local path to the file to be uploaded.
             remote_filename (str): The name of the file on the controller after upload.
             script_name     (str): The name of the script to execute after upload. If None, will use remote_filename under the assumption that you want to run the same script you just uploaded.
             task_name       (str): The name of the "task" for the script execution. If None, will use remote_filename with "-run-1" appended.
@@ -225,7 +225,7 @@ class Newport_Controller_Connection():
         print(f"Converted {dat_path} to {csv_path}")
         
 
-    def send_fcgi_command(self, commands):
+    def send_fcgi_command(self, commands, verbose=True):
         ''' Send a FastCGI command to the Newport XPS controller.
         Args:
             commands (list): A list of commands to send to the controller.
@@ -237,8 +237,11 @@ class Newport_Controller_Connection():
         query = "%0A".join(commands) + "%0A/ENDREQUEST/"
         url = f"http://{self.IP}/MainController.fcgi/s=1/i=2018130879/t=30/q={query}"
         response = requests.get(url, auth=self.AUTH)
-        print("→", commands[-1])
-        print(response.text)
+
+        if verbose:
+            print("→", commands[-1])
+            print(response.text)
+        
         return response.text
 
     def start_gathering(self, trigger="Immediate", time_ms=5000):
@@ -258,7 +261,7 @@ class Newport_Controller_Connection():
         self.send_fcgi_command(cmds)
 
 
-    def poll_until_gathering_done(self, timeout=20):
+    def poll_until_gathering_done(self, timeout=20, verbose=True):
         ''' Poll the controller until the gathering is complete.
         Args:
             timeout (int): The maximum time to wait for the gathering to complete, in seconds. Default is 20 seconds.
@@ -270,7 +273,7 @@ class Newport_Controller_Connection():
         timeout = max(timeout, (self.time_ms//1000) + 1)    # If we are intentionally trying to record for longer, extend the timeout
         start_time = time.time()
         while True:
-            response = self.send_fcgi_command(["GatheringCurrentNumberGet(int*,int*)"])
+            response = self.send_fcgi_command(["GatheringCurrentNumberGet(int*,int*)"], verbose=verbose)
             try:
                 # Parse the returned values
                 parts = response.split(",")
@@ -280,7 +283,8 @@ class Newport_Controller_Connection():
                 if zero_val and current != 0:
                     zero_val = False
 
-                print(f"Gathering: {current}/{total}")
+                print(f"Gathering: {current}/{total}") if verbose else None
+
                 if current >= total:
                     return True
             except Exception as e:
@@ -347,6 +351,69 @@ script_args=
         NOTE: this does not work right now
         '''
         self.send_fcgi_command([f"KillAll"])
+
+    def group_status_get(self,group):
+        ''' Get the status of a group on the Newport XPS controller.
+        Args:
+            group (int): The group number to get the status of. This should be a valid group number on the controller.
+        Returns:
+            str: The response from the controller containing the group status.
+        '''
+        response = self.send_fcgi_command([f"GroupStatusGet(Group{group}, int*)"])
+        return response
+
+    def safe_start(self, group):
+        ''' 
+            Args:
+                group (int): The group number to safe start. This should be a valid group number on the controller.
+
+            If the controller is already running, then this won't do anything. However, if the controller is either uninitialized or needs to be homed, then this will correct that.
+        '''
+        res = self.group_status_get(group)
+        val = self.read_group_status_response(res)
+
+        # Uninitialized states are 1 and 7
+        if val == 1 or val == 7:
+            print("Group is uninitialized. Initializing...")
+            self.init_group(group)
+            time.sleep(1)
+
+            res = self.group_status_get(group)
+            val = self.read_group_status_response(res)
+        
+        if val == 42:
+            print("Group needs to be homed. Homing...")
+            self.home_group(group)
+            time.sleep(1)
+
+            res = self.group_status_get(group)
+            val = self.read_group_status_response(res)
+
+        if val == 11 or val == 12:
+            print("Group is ready to go!")
+            return
+        else:
+            raise Exception(f"Group is in an unexpected state: {val}")
+    
+    def read_group_status_response(self, response):
+        ''' Read the response from the GroupStatusGet command and parse it's values.
+        
+        Args:
+            response (str): The response from the GroupStatusGet command.
+            
+        Returns:
+            int: The status value of the group.'''
+        
+        lines = response.split(",")
+
+        # First value is 0 if successful
+        if lines[0] != "0":
+            raise Exception(f"Error reading group status:  {response}")
+        
+        # Now read the status value and return it
+        val = int(lines[1])
+        return val
+        
 
     def PVT_verification(self, group, filename):
         ''' Verify the PVT trajectory for a group on the Newport XPS controller.
