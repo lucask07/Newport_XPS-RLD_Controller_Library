@@ -1,4 +1,4 @@
-import TCL_upload, generate_pvt, pvt
+import TCL_upload, pvt
 from Generate_TCL import TCL_script
 from generate_pvt import fix_csv
 import numpy as np
@@ -110,6 +110,7 @@ def main():
     if result is not None:
         raise Exception("PVT file verification failed.")
 
+
     # Start the polling process
     if controller.poll_until_gathering_done(timeout=5, verbose=False):
         controller.stop_and_save_gathering()
@@ -120,8 +121,6 @@ def main():
 
     # Optional step to convert the gathered data from .dat to .csv format
     controller.convert_dat_to_csv("Gathering.dat", "Gathering.csv")
-
-
 
 
 
