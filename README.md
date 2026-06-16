@@ -168,3 +168,7 @@ else:
 # Optional step to convert the gathered data from .dat to .csv format
 controller.convert_dat_to_csv("Gathering.dat", "Gathering.csv")
 ```
+
+## Web interface
+
+The web interface can be accessed with user name: Administrator and password: Administrator 
