@@ -14,6 +14,20 @@ from tttrmode import capture_file, PTU_PATH
 
 SPAD_DATA = False
 
+"""
+Example simple moves
+
+# rotation stage (group3, channel 1, move relative -8 degrees) 
+controller.move_relative(3,1,-8)
+
+# linear stage (move 5 mm relative)
+controller.move_relative(3,2,5)
+
+To discover other controller methods: 
+In Ipython type controller.  and then hit tab to see other commands 
+
+"""
+
 def get_controller():
     # Initialize the controller connection
     # Ensure the IP address, username, and password are correct for your setup
