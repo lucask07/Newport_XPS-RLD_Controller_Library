@@ -204,11 +204,8 @@ def fix_csv(filename, acceleration=-1200):
                 delta_time = float(parts[0]) - float(lines_og[i-1].strip().split(',')[0])
                 delta_pos1 = float(parts[1]) - float(lines_og[i-1].strip().split(',')[1])
                 delta_pos2 = float(parts[3]) - float(lines_og[i-1].strip().split(',')[3])
-
-            
-            
-            #print(f"Line {i}: Original timestamp: {float(parts[0])}, previous timestamp: {float(lines[i-1].strip().split(',')[0])}, Delta time: {delta_time:.5f}")
    
+            #print(f"Line {i}: Original timestamp: {float(parts[0])}, previous timestamp: {float(lines[i-1].strip().split(',')[0])}, Delta time: {delta_time:.5f}")
             
             parts[0] = f"{delta_time:.5f}"
             parts[1] = f"{delta_pos1:.5f}"
@@ -241,12 +238,6 @@ def fix_csv(filename, acceleration=-1200):
         parts = lines[2].strip().split(',')
         parts[0] = f"{float(parts[0]) * 4}"
         lines[2] = ','.join(parts) + '\n'
-
-
-    
-        
-
-
         
     with open(filename, 'w') as f:
         f.writelines(lines[:-1])

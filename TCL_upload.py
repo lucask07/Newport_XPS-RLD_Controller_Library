@@ -442,6 +442,15 @@ script_args=
         return response
 
 
+    def move_relative(self, group, pos, move):
+        response = self.send_fcgi_command([f"GroupMoveRelative(Group{group}.Pos{pos}, {move})"])
+        return response
+  
+    def move_absolute(self, group, pos, move):
+        response = self.send_fcgi_command([f"GroupMoveAbsolute(Group{group}.Pos{pos}, {move})"])
+        return response
+
+
     def full_pvt_verification(self, group, filename):
         ''' Perform a full PVT verification for a group on the Newport XPS controller.
         Args:
