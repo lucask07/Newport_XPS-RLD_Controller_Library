@@ -7,8 +7,8 @@ import sys
 import threading 
 import time 
 
-sys.path.append("C:\\Users\\koer2434\Documents\\s24_seth_lindgren\\s24_seth_lindgren\\picodemocode\\PH300-v3.x-Demos\\64\\python\\")
-sys.path.append("C:\\Users\\koer2434\Documents\\s24_seth_lindgren\\s24_seth_lindgren\\picodemocode\\PH300-v3.x-Demos\\64\\python\TTTRmode\\")
+sys.path.append("C:\\Users\\Public\Documents\\s24_seth_lindgren\\s24_seth_lindgren\\picodemocode\\PH300-v3.x-Demos\\64\\python\\")
+sys.path.append("C:\\Users\\Public\Documents\\s24_seth_lindgren\\s24_seth_lindgren\\picodemocode\\PH300-v3.x-Demos\\64\\python\TTTRmode\\")
 
 from tttrmode import capture_file, PTU_PATH
 
