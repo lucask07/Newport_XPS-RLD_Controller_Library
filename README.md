@@ -171,4 +171,4 @@ controller.convert_dat_to_csv("Gathering.dat", "Gathering.csv")
 
 ## Web interface
 
-The web interface can be accessed with user name: Administrator and password: Administrator 
+The motion controller can be accessed at 10.219.2.44 with user name: Administrator and password: Administrator 
